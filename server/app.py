@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from flask import request, session, jsonify
+from flask import request, session, jsonify, make_response
 from flask_restful import Resource
 from sqlalchemy.exc import IntegrityError
 
@@ -83,7 +83,75 @@ class Logout(Resource):
             return {}, 401
 
 class RecipeIndex(Resource):
-    pass
+    def get(self):
+        recipes = []
+        user = User.query.filter(User.id == session.get('user_id')).first()
+        if user:
+            for recipe in Recipe.query.all():
+                if user.id == recipe.user_id:
+                    add_recipe = {
+                        'title': recipe.title,
+                        'instructions': recipe.instructions,
+                        'minutes_to_complete': recipe.minutes_to_complete
+                    }
+                    recipes.append(add_recipe)
+            
+            # recipes.append(user)
+            return make_response(recipes, 200)
+        else:
+            return {}, 401
+        
+
+    def post(self):
+        # Check if the user is logged in
+        if not session.get('user_id'):
+            return {'error': 'Unauthorized'}, 401
+
+        # Get the logged in user
+        user = User.query.filter(User.id == session.get('user_id')).first()
+
+        # Get the request JSON data
+        data = request.get_json()
+
+
+        # Create a new recipe
+        try:
+            new_recipe = Recipe(
+                title=data['title'],
+                instructions=data['instructions'],
+                minutes_to_complete=data['minutes_to_complete'],
+                user_id=user.id
+            )
+
+            db.session.add(new_recipe)
+            db.session.commit()
+
+            # Return the response
+            response_data = {
+                'title': new_recipe.title,
+                'instructions': new_recipe.instructions,
+                'minutes_to_complete': new_recipe.minutes_to_complete,
+                'user': {
+                    'username': user.username,
+                    'bio': user.bio,
+                    'image_url': user.image_url
+                }
+            }
+
+            return response_data, 201
+        
+        except IntegrityError:
+            # Handle any integrity constraint violations (e.g., duplicate username)
+            db.session.rollback()
+            return {'error': 'Username already exists'}, 422
+
+
+
+    
+
+
+
+
 
 api.add_resource(Signup, '/signup', endpoint='signup')
 api.add_resource(CheckSession, '/check_session', endpoint='check_session')
